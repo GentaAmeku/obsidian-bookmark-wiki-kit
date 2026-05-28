@@ -625,14 +625,24 @@ def link(root: Path, limit: int = 50) -> None:
 
 
 def embedded_file_map(bookmark_folder: str, chrome_profile: str, language: str) -> dict[str, str]:
-    cfg = {"bookmark_folder": bookmark_folder, "chrome_profile": chrome_profile, "language": language, "auto_commit": False, "auto_push": False, "x_provider": "hermes"}
+    cfg = {
+        "bookmark_folder": bookmark_folder,
+        "chrome_profile": chrome_profile,
+        "language": language,
+        "auto_commit": False,
+        "auto_push": False,
+        "x_provider": "hermes",
+        "document_ingest": True,
+        "document_converter": "markitdown",
+        "max_document_mb": 50,
+    }
     return {
         ".obsidian-kb.json": json.dumps(cfg, ensure_ascii=False, indent=2) + "\n",
         ".gitignore": ".obsidian/workspace.json\n.obsidian/workspace-mobile.json\n.trash/\n.DS_Store\n",
         "AGENTS.md": "# AGENTS.md instructions for Obsidian bookmark wiki\n\n常に日本語で回答してください。\n\nこのリポジトリは Obsidian vault です。\n",
         "logs/ingested.json": "{}\n",
         "logs/query-history.json": "[]\n",
-        "templates/source-note.md": "---\ntype: source\ntitle:\nsource_url:\nnormalized_url:\nsource_type:\ndomain:\nauthor:\npublished:\ncaptured:\nstatus: unread\ncontent_status: metadata_only\ncontent_provider:\ntags: []\n---\n\n# {{title}}\n\n## Summary\n\n## Key Points\n\n## Quotes\n\n## My Memo\n\n## Related\n",
+        "templates/source-note.md": "---\ntype: source\ntitle:\nsource_url:\nnormalized_url:\nsource_type:\ndomain:\nauthor:\npublished:\ncaptured:\nstatus: unread\ncontent_status: metadata_only\ncontent_provider:\nfile_type:\nconverted_path:\ntags: []\n---\n\n# {{title}}\n\n## Summary\n\n## Key Points\n\n## Quotes\n\n## My Memo\n\n## Related\n",
         "templates/knowledge-note.md": "---\ntype: knowledge\ntitle:\nupdated:\ntags: []\n---\n\n# {{title}}\n\n## Conclusion\n\n## Important Insights\n\n## Best Practices\n\n## Open Questions\n\n## Related Sources\n\n## Related Notes\n",
         "templates/inbox-note.md": "---\ntype: inbox\ntitle:\ncreated:\nstatus: unprocessed\ntags: []\n---\n\n# {{title}}\n\n## Capture\n\n## Context\n\n## Next Action\n",
         "templates/daily-note.md": "---\ntype: daily\ndate:\ncreated:\ntags:\n  - daily-review\n---\n\n# Daily Review {{date}}\n\n## Inbox Review\n\n## New Sources\n\n## Notes Updated\n\n## Orphan Notes\n\n## Suggested Promotions\n\n## Actions\n",
