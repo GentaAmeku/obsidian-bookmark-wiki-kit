@@ -12,7 +12,7 @@ Chrome ブックマークを「AI に読ませたい URL キュー」として�
 ## 推奨する使い方
 
 ```sh
-git clone https://github.com/<owner>/obsidian-bookmark-wiki-kit.git
+git clone https://github.com/GentaAmeku/obsidian-bookmark-wiki-kit.git
 cd obsidian-bookmark-wiki-kit
 ```
 
@@ -32,25 +32,29 @@ python3 skills/obsidian-knowledge-base/scripts/obsidian_kb.py init-vault --root 
 
 ## ブックマーク運用
 
-Chrome に `AI Inbox` フォルダを作り、AI に読ませたい URL をそこへ入れます。
+Chrome のブックマークに `AI Inbox` フォルダを作り、Zenn、Qiita、YouTube など、AI に読ませたいデータ元サイトをブックマークします。
 
-取り込み:
+取り込みや検索は、ユーザーがコマンドを直接実行するのではなく、Codex Skill 経由で依頼する運用を推奨します。
 
-```sh
-python3 ~/.codex/skills/obsidian-knowledge-base/scripts/obsidian_kb.py --root ~/Documents/wiki-private ingest-bookmarks
+ブックマーク取り込みの依頼例:
+
+```txt
+$obsidian-knowledge-base AI Inbox のブックマークを取り込んで
 ```
 
-単一 URL 取り込み:
+単一 URL 取り込みの依頼例:
 
-```sh
-python3 ~/.codex/skills/obsidian-knowledge-base/scripts/obsidian_kb.py --root ~/Documents/wiki-private ingest-url "https://example.com/article"
+```txt
+$obsidian-knowledge-base このURLをSource Note化して: https://example.com/article
 ```
 
-検索:
+検索の依頼例:
 
-```sh
-python3 ~/.codex/skills/obsidian-knowledge-base/scripts/obsidian_kb.py --root ~/Documents/wiki-private query "react compiler"
+```txt
+$obsidian-knowledge-base この wiki から react compiler を検索して
 ```
+
+CLI は Skill 内部で使う実行手段として同梱しています。必要な場合だけ手動実行できます。
 
 ## vault 設定
 
