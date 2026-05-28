@@ -1,0 +1,7 @@
+[project]
+name = "obsidian-bookmark-wiki-kit"
+version = "0.1.0"
+description = "A Codex skill and CLI kit for turning Chrome bookmarks into an Obsidian Markdown knowledge base."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
