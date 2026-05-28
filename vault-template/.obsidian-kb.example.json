@@ -4,5 +4,8 @@
   "language": "ja",
   "auto_commit": false,
   "auto_push": false,
-  "x_provider": "hermes"
+  "x_provider": "hermes",
+  "document_ingest": true,
+  "document_converter": "markitdown",
+  "max_document_mb": 50
 }

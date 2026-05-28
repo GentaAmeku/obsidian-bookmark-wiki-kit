@@ -17,6 +17,7 @@ vault は ~/Documents/wiki-private、Chrome ブックマークフォルダは AI
 ## 3. Codex が実行する内容
 
 ```sh
+python3 skills/obsidian-knowledge-base/scripts/obsidian_kb.py install-deps
 python3 skills/obsidian-knowledge-base/scripts/obsidian_kb.py install-skill
 python3 skills/obsidian-knowledge-base/scripts/obsidian_kb.py init-vault --root ~/Documents/wiki-private --bookmark-folder "AI Inbox"
 ```

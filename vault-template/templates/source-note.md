@@ -11,6 +11,8 @@ captured:
 status: unread
 content_status: metadata_only
 content_provider:
+file_type:
+converted_path:
 tags: []
 ---
 

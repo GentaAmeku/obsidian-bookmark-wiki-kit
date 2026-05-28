@@ -55,7 +55,7 @@ Ingest bookmarks:
 python3 ~/.codex/skills/obsidian-knowledge-base/scripts/obsidian_kb.py --root /path/to/vault ingest-bookmarks
 ```
 
-Ingest one URL:
+Ingest one URL, including PDF / Excel / Office document URLs:
 
 ```bash
 python3 ~/.codex/skills/obsidian-knowledge-base/scripts/obsidian_kb.py --root /path/to/vault ingest-url "https://example.com/article"
@@ -82,3 +82,4 @@ python3 ~/.codex/skills/obsidian-knowledge-base/scripts/obsidian_kb.py --root /p
 - Internal links use Wikilink syntax.
 - X/Twitter ingestion may use Hermes if available; otherwise create a metadata-only note.
 - YouTube ingestion may use `yt-dlp` if available; otherwise mark `asr_required`.
+- PDF / Excel / Word / PowerPoint document URLs should use MarkItDown when available and store extracted Markdown under `assets/extracted/`.

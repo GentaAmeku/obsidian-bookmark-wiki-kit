@@ -7,6 +7,8 @@ Chrome Bookmarks
 └── AI Inbox
     ├── https://example.com/article
     └── https://www.youtube.com/watch?v=...
+    ├── https://example.com/report.pdf
+    └── https://example.com/data.xlsx
 ```
 
 スマホと PC で同じ Google アカウントの Chrome 同期を有効にすれば、スマホで追加した URL も PC 側の Chrome profile に同期されます。

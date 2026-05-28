@@ -8,6 +8,7 @@ Chrome ブックマークを「AI に読ませたい URL キュー」として�
 - vault 雛形: `vault-template/`
 - 初期設定ドキュメント: `docs/`
 - ローカル CLI: `obsidian_kb.py`
+- PDF / Excel / Word / PowerPoint などの Document ingest（MarkItDown 利用）
 
 ## 推奨する使い方
 
@@ -26,13 +27,14 @@ vault は ~/Documents/wiki-private、Chrome ブックマークフォルダは AI
 Codex は概ね次を実行します。
 
 ```sh
+python3 skills/obsidian-knowledge-base/scripts/obsidian_kb.py install-deps
 python3 skills/obsidian-knowledge-base/scripts/obsidian_kb.py install-skill
 python3 skills/obsidian-knowledge-base/scripts/obsidian_kb.py init-vault --root ~/Documents/wiki-private --bookmark-folder "AI Inbox"
 ```
 
 ## ブックマーク運用
 
-Chrome のブックマークに `AI Inbox` フォルダを作り、Zenn、Qiita、YouTube など、AI に読ませたいデータ元サイトをブックマークします。
+Chrome のブックマークに `AI Inbox` フォルダを作り、Zenn、Qiita、YouTube、PDF、Excel など、AI に読ませたいデータ元サイトやファイル URL をブックマークします。
 
 取り込みや検索は、ユーザーがコマンドを直接実行するのではなく、Codex Skill 経由で依頼する運用を推奨します。
 
@@ -76,3 +78,28 @@ CLI は Skill 内部で使う実行手段として同梱しています。必要
 ## 状態
 
 この kit はローカル filesystem + Codex Skill ベースです。MCP / vector DB / RAG はまだ必須にしていません。
+
+
+## PDF / Excel などのファイル
+
+ブックマーク先が `.pdf`, `.xlsx`, `.xls`, `.docx`, `.pptx`, `.csv` の場合は、MarkItDown が利用可能であれば Markdown に変換してから Source Note 化します。
+
+```txt
+URL
+↓
+download file
+↓
+MarkItDown convert
+↓
+assets/extracted/<slug>.md
+↓
+sources/documents/<domain>/<slug>.md
+```
+
+MarkItDown は optional dependency です。Document ingest を使う環境では次をインストールします。
+
+```sh
+python3 skills/obsidian-knowledge-base/scripts/obsidian_kb.py install-deps
+```
+
+Source Note には全文ではなく、変換結果から作った要約・要点・短い引用を保存します。変換済み Markdown は `assets/extracted/` に保存されます。

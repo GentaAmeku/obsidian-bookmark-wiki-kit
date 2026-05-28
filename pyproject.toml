@@ -5,3 +5,6 @@ description = "A Codex skill and CLI kit for turning Chrome bookmarks into an Ob
 requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
+
+[project.optional-dependencies]
+documents = ["markitdown[pdf,xlsx,xls,docx,pptx]"]

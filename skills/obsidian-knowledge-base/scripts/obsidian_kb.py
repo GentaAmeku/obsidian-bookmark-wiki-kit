@@ -13,12 +13,15 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
 STOP_QUERY_PARAMS = {"fbclid", "gclid", "yclid", "igshid", "mc_cid", "mc_eid", "spm", "ref"}
 DEFAULT_BOOKMARK_FOLDER = "AI Inbox"
 SKILL_NAME = "obsidian-knowledge-base"
+DOCUMENT_EXTS = {"pdf", "xlsx", "xls", "docx", "pptx", "csv"}
+MAX_DOCUMENT_BYTES = 50 * 1024 * 1024
 
 
 def today() -> str:
@@ -102,7 +105,16 @@ def normalize_url(url: str) -> str:
     return urlunparse((scheme, netloc, path, "", query, ""))
 
 
+def file_ext_from_url(url: str) -> str:
+    path = urlparse(normalize_url(url)).path.lower()
+    match = re.search(r"\.([a-z0-9]{2,6})$", path)
+    return match.group(1) if match else ""
+
+
 def source_type_for(url: str) -> str:
+    ext = file_ext_from_url(url)
+    if ext in DOCUMENT_EXTS:
+        return "document"
     host = urlparse(normalize_url(url)).netloc
     if host in {"youtu.be", "youtube.com", "m.youtube.com"} or host.endswith(".youtube.com"):
         return "youtube"
@@ -223,11 +235,24 @@ class ReadableHTMLParser(HTMLParser):
         return "\n\n".join(dedupe([line for line in lines if len(line) >= 35]))
 
 
-def fetch_url(url: str, timeout: int = 20) -> str:
+def fetch_bytes(url: str, timeout: int = 30, max_bytes: int = MAX_DOCUMENT_BYTES) -> tuple[bytes, str]:
     req = Request(url, headers={"User-Agent": "Mozilla/5.0 obsidian-bookmark-wiki-kit/1.0"})
     with urlopen(req, timeout=timeout) as res:
-        charset = res.headers.get_content_charset() or "utf-8"
-        return res.read().decode(charset, errors="replace")
+        content_type = res.headers.get("content-type", "")
+        length = res.headers.get("content-length")
+        if length and int(length) > max_bytes:
+            raise ValueError(f"Document is too large: {length} bytes > {max_bytes} bytes")
+        raw = res.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise ValueError(f"Document is too large: > {max_bytes} bytes")
+    return raw, content_type
+
+
+def fetch_url(url: str, timeout: int = 20) -> str:
+    raw, content_type = fetch_bytes(url, timeout=timeout)
+    charset_match = re.search(r"charset=([^;]+)", content_type, re.I)
+    charset = charset_match.group(1) if charset_match else "utf-8"
+    return raw.decode(charset, errors="replace")
 
 
 def summarize_text(text: str, max_points: int = 7) -> tuple[str, list[str], list[str]]:
@@ -258,6 +283,72 @@ def ingest_web(url: str) -> dict:
         "content_status": "summarized" if (summary or key_points) else "fetched",
         "content_provider": "stdlib-html",
     }
+
+
+
+def skill_dir() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def markitdown_convert(path: Path) -> str:
+    try:
+        from markitdown import MarkItDown
+        md = MarkItDown(enable_plugins=False)
+        result = md.convert(str(path))
+        return getattr(result, "text_content", None) or getattr(result, "markdown", "") or ""
+    except Exception as import_exc:
+        venv_python = skill_dir() / ".venv" / "bin" / "python"
+        if not venv_python.exists():
+            raise RuntimeError("markitdown is not installed. Run: obsidian_kb.py install-deps") from import_exc
+        code = """
+from markitdown import MarkItDown
+import sys
+md = MarkItDown(enable_plugins=False)
+r = md.convert(sys.argv[1])
+sys.stdout.write(getattr(r, 'text_content', None) or getattr(r, 'markdown', '') or '')
+"""
+        proc = subprocess.run([str(venv_python), "-c", code, str(path)], text=True, capture_output=True, timeout=120)
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr.strip() or "markitdown conversion failed")
+        return proc.stdout
+
+
+def title_from_document_url(url: str) -> str:
+    path = urlparse(normalize_url(url)).path
+    name = Path(path).stem
+    return clean_space(name.replace("-", " ").replace("_", " ")) or url
+
+
+def ingest_document(root: Path, url: str) -> dict:
+    raw, content_type = fetch_bytes(url, timeout=45)
+    ext = file_ext_from_url(url)
+    if not ext:
+        if "pdf" in content_type:
+            ext = "pdf"
+        elif "spreadsheet" in content_type or "excel" in content_type:
+            ext = "xlsx"
+        elif "word" in content_type:
+            ext = "docx"
+        elif "presentation" in content_type or "powerpoint" in content_type:
+            ext = "pptx"
+        else:
+            ext = "bin"
+    title = title_from_document_url(url)
+    digest = hashlib.sha256(raw).hexdigest()[:16]
+    with tempfile.TemporaryDirectory(prefix="obsidian-doc-") as tmp:
+        local = Path(tmp) / f"download.{ext}"
+        local.write_bytes(raw)
+        try:
+            converted = markitdown_convert(local)
+        except Exception as exc:
+            return {"title": title, "summary": f"MarkItDown conversion failed: {exc}", "key_points": [], "quotes": [], "raw_text": "", "author": "", "published": "", "content_status": "conversion_failed", "content_provider": "markitdown", "file_type": ext}
+    converted = converted.strip()
+    extracted_rel = Path("assets") / "extracted" / f"{ascii_slug(title, 'document')}-{digest}.md"
+    extracted_path = root / extracted_rel
+    extracted_path.parent.mkdir(parents=True, exist_ok=True)
+    extracted_path.write_text(converted + "\n", encoding="utf-8")
+    summary, key_points, quotes = summarize_text(converted)
+    return {"title": title, "summary": summary or converted[:1200], "key_points": key_points, "quotes": quotes, "raw_text": converted, "author": "", "published": "", "content_status": "converted_summarized" if converted else "converted_empty", "content_provider": "markitdown", "file_type": ext, "converted_path": str(extracted_rel)}
 
 
 def ingest_youtube(url: str) -> dict:
@@ -335,13 +426,14 @@ def extract_tags(title: str, text: str, source_type: str) -> list[str]:
 
 def source_note_path(root: Path, url: str, title: str) -> Path:
     stype = source_type_for(url)
+    source_dir = "documents" if stype == "document" else stype
     domain = ascii_slug(urlparse(normalize_url(url)).netloc or "unknown", "unknown")
     slug = ascii_slug(title, "source")
-    path = root / "sources" / stype / domain / f"{slug}.md"
+    path = root / "sources" / source_dir / domain / f"{slug}.md"
     if not path.exists():
         return path
     short = hashlib.sha256(normalize_url(url).encode()).hexdigest()[:8]
-    return root / "sources" / stype / domain / f"{slug}-{short}.md"
+    return root / "sources" / source_dir / domain / f"{slug}-{short}.md"
 
 
 def write_source(root: Path, url: str, force: bool = False) -> Path:
@@ -354,13 +446,13 @@ def write_source(root: Path, url: str, force: bool = False) -> Path:
             print(f"Already ingested: {existing.relative_to(root)}")
             return existing
     stype = source_type_for(url)
-    info = ingest_youtube(url) if stype == "youtube" else ingest_x(url) if stype == "x" else ingest_web(url)
+    info = ingest_document(root, url) if stype == "document" else ingest_youtube(url) if stype == "youtube" else ingest_x(url) if stype == "x" else ingest_web(url)
     title = info["title"] or normalized
     path = source_note_path(root, url, title)
     path.parent.mkdir(parents=True, exist_ok=True)
-    status = "summarized" if info.get("content_status") in {"summarized", "transcript_summarized", "asr_summarized"} else "unread"
+    status = "summarized" if info.get("content_status") in {"summarized", "transcript_summarized", "asr_summarized", "converted_summarized"} else "unread"
     tags = extract_tags(title, info.get("raw_text") or info.get("summary") or "", stype)
-    fields = {"type": "source", "title": title, "source_url": url, "normalized_url": normalized, "source_type": stype, "domain": urlparse(normalized).netloc, "author": info.get("author", ""), "published": info.get("published", ""), "captured": today(), "status": status, "content_status": info.get("content_status", "metadata_only"), "content_provider": info.get("content_provider", ""), "tags": tags}
+    fields = {"type": "source", "title": title, "source_url": url, "normalized_url": normalized, "source_type": stype, "domain": urlparse(normalized).netloc, "author": info.get("author", ""), "published": info.get("published", ""), "captured": today(), "status": status, "content_status": info.get("content_status", "metadata_only"), "content_provider": info.get("content_provider", ""), "file_type": info.get("file_type", ""), "converted_path": info.get("converted_path", ""), "tags": tags}
     body = [frontmatter(fields), "", f"# {title}", "", "## Summary", "", info.get("summary", "").strip(), "", "## Key Points", "", "\n".join(f"- {p}" for p in info.get("key_points", [])), "", "## Quotes", "", "\n".join(f"- {p}" for p in info.get("quotes", [])), "", "## My Memo", "", "", "## Related", ""]
     path.write_text("\n".join(body).rstrip() + "\n", encoding="utf-8")
     ingested[normalized] = {"source_url": url, "normalized_url": normalized, "note_path": str(path.relative_to(root)), "title": title, "source_type": stype, "captured": today(), "last_checked": today(), "content_hash": "sha256:" + hashlib.sha256((info.get("raw_text") or info.get("summary") or "").encode()).hexdigest(), "status": status}
@@ -551,7 +643,7 @@ def embedded_file_map(bookmark_folder: str, chrome_profile: str, language: str) 
 def init_vault(root: Path, bookmark_folder: str, chrome_profile: str, language: str, force: bool = False) -> None:
     if root.exists() and any(root.iterdir()) and not force:
         raise SystemExit(f"Refusing to initialize non-empty directory without --force: {root}")
-    dirs = ["inbox", "sources/zenn", "sources/qiita", "sources/youtube", "sources/x", "sources/web", "notes/ai", "notes/frontend", "notes/gaming", "notes/general", "daily", "templates", "logs", "assets", "system/skills"]
+    dirs = ["inbox", "sources/zenn", "sources/qiita", "sources/youtube", "sources/x", "sources/web", "sources/documents", "notes/ai", "notes/frontend", "notes/gaming", "notes/general", "daily", "templates", "logs", "assets", "assets/extracted", "system/skills"]
     for name in dirs:
         (root / name).mkdir(parents=True, exist_ok=True)
         if name not in {"templates", "logs", "system/skills"}:
@@ -574,6 +666,20 @@ def init_vault(root: Path, bookmark_folder: str, chrome_profile: str, language: 
         if not path.exists() or force or rel == ".obsidian-kb.json":
             path.write_text(content, encoding="utf-8")
     print(f"Initialized vault: {root}")
+
+
+
+
+def install_deps(force: bool = False) -> None:
+    venv = skill_dir() / ".venv"
+    python = venv / "bin" / "python"
+    if force and venv.exists():
+        shutil.rmtree(venv)
+    if not python.exists():
+        subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
+    subprocess.run([str(python), "-m", "pip", "install", "--upgrade", "pip"], check=True)
+    subprocess.run([str(python), "-m", "pip", "install", "markitdown[pdf,xlsx,xls,docx,pptx]"], check=True)
+    print(f"Installed document dependencies: {venv}")
 
 
 def install_skill(codex_home_path: Path, force: bool = True) -> None:
@@ -602,6 +708,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Obsidian Bookmark Wiki Kit CLI")
     parser.add_argument("--root", default=None, help="Vault root. Defaults to OBSIDIAN_WIKI_ROOT or cwd.")
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("install-deps")
+    p.add_argument("--force", action="store_true")
 
     p = sub.add_parser("install-skill")
     p.add_argument("--codex-home", default=str(codex_home()))
@@ -640,6 +749,9 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    if args.cmd == "install-deps":
+        install_deps(args.force)
+        return
     if args.cmd == "install-skill":
         install_skill(Path(args.codex_home).expanduser(), force=not args.no_force)
         return
